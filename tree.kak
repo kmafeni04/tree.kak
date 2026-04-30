@@ -37,6 +37,8 @@ provide-module tree %{
           if [ -d "$target" ]; then
             ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|($original)|\1/|")"
           fi
+        elif [ "$line" = "." ]; then
+          ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|.*|$(basename "$kak_opt__tree_current_dir")/|")"
         elif [ -d "$line" ]; then
           ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|(.*)|\1/|")"
         fi
@@ -65,7 +67,7 @@ provide-module tree %{
     set-option global _tree_jump_client "%val{client}"
     evaluate-commands %sh{
       dir=
-      [ -f "$kak_buffile" ] && dir="$(dirname $kak_buffile)" || dir="$PWD"
+      [ -f "$kak_buffile" ] && dir="$(dirname "$kak_buffile")" || dir="$PWD"
       if [ -n "$TMUX" ]; then
         tmux split-window -c "$dir" -l "20%" -h -b "kak -c $kak_session -e 'edit %{ $kak_buffile }; _tree-enable-impl'" > /dev/null
       else
@@ -93,12 +95,22 @@ provide-module tree %{
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
 
-      open(){
-        real_path() {
+      if ! [ -x "$(command -v realpath)" ]; then
+        realpath() {
+          OURPWD=$PWD
           cd "$(dirname "$1")"
-          echo "$PWD/$(basename "$1")"
+          LINK=$(readlink "$(basename "$1")")
+          while [ "$LINK" ]; do
+            cd "$(dirname "$LINK")"
+            LINK=$(readlink "$(basename "$1")")
+          done
+          REALPATH="$PWD/$(basename "$1")"
+          cd "$OURPWD"
+          echo "$REALPATH"
         }
-        local filepath="$(real_path "$1")"
+      fi
+      open(){
+        local filepath="$(realpath "$1")"
 
         if [ -d "$filepath" ]; then
           echo "set-option buffer _tree_current_dir \"$filepath\""
@@ -180,11 +192,22 @@ provide-module tree %{
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
-      real_path() {
-        cd "$(dirname "$1")"
-        echo "$PWD/$(basename "$1")"
-      }
-      echo "set-option buffer _tree_copied_filepath '$(real_path "$current_file")'"
+      if ! [ -x "$(command -v realpath)" ]; then
+        realpath() {
+          OURPWD=$PWD
+          cd "$(dirname "$1")"
+          LINK=$(readlink "$(basename "$1")")
+          while [ "$LINK" ]; do
+            cd "$(dirname "$LINK")"
+            LINK=$(readlink "$(basename "$1")")
+          done
+          REALPATH="$PWD/$(basename "$1")"
+          cd "$OURPWD"
+          echo "$REALPATH"
+        }
+      fi
+
+      echo "set-option buffer _tree_copied_filepath '$(realpath "$current_file")'"
       echo "set-option buffer _tree_copied_action '$1'"
     }
   }
@@ -264,12 +287,22 @@ provide-module tree %{
   define-command -hidden _tree-cd-impl -params 2 %{
     evaluate-commands %sh{
       cd "$kak_opt__tree_current_dir"
-      real_path() {
-        cd "$(dirname "$1")"
-        echo "$PWD/$(basename "$1")"
-      }
-      dir="$(real_path "$1")"
-      ret_dir="$(real_path "$2")"
+      if ! [ -x "$(command -v realpath)" ]; then
+        realpath() {
+          OURPWD=$PWD
+          cd "$(dirname "$1")"
+          LINK=$(readlink "$(basename "$1")")
+          while [ "$LINK" ]; do
+            cd "$(dirname "$LINK")"
+            LINK=$(readlink "$(basename "$1")")
+          done
+          REALPATH="$PWD/$(basename "$1")"
+          cd "$OURPWD"
+          echo "$REALPATH"
+        }
+      fi
+      dir="$(realpath "$1")"
+      ret_dir="$(realpath "$2")"
       cd "$dir"
       if [ $? -ne 0 ]; then
         echo "change-directory '$ret_dir'"
@@ -316,6 +349,7 @@ provide-module tree %{
     map buffer normal O ":nop<ret>"
     map buffer normal c ":nop<ret>"
     map buffer normal d ":nop<ret>"
+    map buffer normal u ":nop<ret>"
     map buffer normal <a-d> ":nop<ret>"
     map buffer normal <a-c> ":nop<ret>"
     map buffer normal x ":nop<ret>"

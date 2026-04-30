@@ -51,6 +51,7 @@ hook global WinSetOption filetype=tree %{
   map buffer normal O ":nop<ret>"
   map buffer normal c ":nop<ret>"
   map buffer normal d ":nop<ret>"
+  map buffer normal u ":nop<ret>"
   map buffer normal <a-d> ":nop<ret>"
   map buffer normal <a-c> ":nop<ret>"
   map buffer normal x ":nop<ret>"
