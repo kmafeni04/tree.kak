@@ -67,7 +67,7 @@ provide-module tree %{
       dir=
       [ -f "$kak_buffile" ] && dir="$(dirname $kak_buffile)" || dir="$PWD"
       if [ -n "$TMUX" ]; then
-        tmux split-window -c "$dir" -l "20%" -h -b "kak -c $kak_session -e 'edit "$kak_buffile"; _tree-enable-impl'" > /dev/null
+        tmux split-window -c "$dir" -l "20%" -h -b "kak -c $kak_session -e 'edit %{ $kak_buffile }; _tree-enable-impl'" > /dev/null
       else
         echo "new 'edit "$kak_buffile"; _tree-enable-impl'"
       fi
