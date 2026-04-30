@@ -36,7 +36,8 @@ hook global WinSetOption filetype=tree %{
 
 ## Note
 
-This configuration has been set on the filetree buffer to prevent accidental changes to the to the buffer, the buffer is the source of truth so if anything changes to it, unwanted actions may be performed to your file system
+This configuration has been set on the filetree buffer to prevent accidental changes to the buffer
+The buffer is the source of truth so if anything changes it outside of the tree commands, unwanted actions may be performed to your file system
 
 ```kak
 hook global WinSetOption filetype=tree %{
