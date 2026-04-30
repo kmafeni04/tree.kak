@@ -1,7 +1,7 @@
 # tree.kak
 Another filetree plugin for kakoune
 
-![preview](./preview.mp4)
+https://github.com/user-attachments/assets/df0a21fe-69d5-43b4-b3ce-3462b3395a81
 
 ## Dependencies
 - [tree](https://gitlab.com/OldManProgrammer/unix-tree)
