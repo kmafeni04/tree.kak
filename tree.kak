@@ -1,6 +1,6 @@
 provide-module tree %{
   declare-option -hidden str _tree_current_dir "."
-  declare-option -hidden str _tree_ui_cmd "echo '..'; tree  -a --noreport --dirsfirst -L 1 -l --compress 2"
+  declare-option -hidden str _tree_ui_cmd "echo '../'; tree -a --noreport --dirsfirst -L 1 --compress 2 -F"
   declare-option -hidden str _tree_jump_client "treejumpclient"
   declare-option -hidden str _tree_client "treeclient"
   declare-option -hidden str _tree_copied_filepath
@@ -22,27 +22,11 @@ provide-module tree %{
         echo "set-option buffer _tree_current_dir '$1'"
       fi
       cd "$kak_opt__tree_current_dir"
-      ui_tree="$(eval $kak_opt__tree_ui_cmd)"
 
-      IFS=$'\n'
-      lines=($(echo "$ui_tree"))
-      count=${#lines[@]}
-
-      for ((i=0; i<count; i++)); do
-        line="$(echo "${lines[$i]}" | grep -Po "[\.\w-].*")"
-
-        if [ -n "$(echo "$line" | grep " -> ")" ]; then
-          original="$(echo "$line" | awk -F' -> ' '{print $1}')"
-          target="$(echo "$line" | awk -F' -> ' '{print $2}')"
-          if [ -d "$target" ]; then
-            ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|($original)|\1/|")"
-          fi
-        elif [ "$line" = "." ]; then
-          ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|.*|$(basename "$kak_opt__tree_current_dir")/|")"
-        elif [ -d "$line" ]; then
-          ui_tree="$(echo "$ui_tree" | sed -E "$((i + 1))s|(.*)|\1/|")"
-        fi
-      done
+      ui_tree="$(
+        eval "$kak_opt__tree_ui_cmd" |
+        sed -E "2s|\.|$(basename "$kak_opt__tree_current_dir")|;s|(.+)( -> .+/)|\1/\2|g"
+      )"
 
       echo "set-register c '$ui_tree'"
       echo "execute-keys '%%<dquote>cR:select $kak_selection_desc<ret>'"
@@ -100,6 +84,8 @@ provide-module tree %{
           echo "set-option buffer _tree_current_dir \"$PWD\""
           echo "execute-keys gg"
         elif [ -f "$filepath" ]; then
+          filepath="$kak_opt__tree_current_dir/$filepath"
+
           if [ -n "$(echo "$kak_client_list" | grep -o "$kak_opt__tree_jump_client")" ]; then
             echo "evaluate-commands -client $kak_opt__tree_jump_client %{ edit -existing "$filepath" }" | kak -p $kak_session
             if [ -n "$TMUX" ]; then
