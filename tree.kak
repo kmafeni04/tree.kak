@@ -19,7 +19,7 @@ provide-module tree %{
     evaluate-commands -save-regs 'c' %sh{
       if [ -n "$1" ]; then
         kak_opt__tree_current_dir="$1"
-        echo "set-option buffer _tree_current_dir \"$1\""
+        echo "set-option buffer _tree_current_dir '$1'"
       fi
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
@@ -49,15 +49,12 @@ provide-module tree %{
     }
   }
 
-  define-command _tree-enable-impl %{
-    evaluate-commands -save-regs 'l' %{
-      set-register l %val{buffile}
+  define-command -hidden _tree-enable-impl -params 1 %{
       edit -scratch -debug "*tree*"
       set-option buffer filetype tree
       rename-client "%opt{_tree_client}"
       execute-keys "gg"
-      tree-redraw %sh{dirname "$kak_reg_l"}
-    }
+      tree-redraw %arg{1}
   }
 
   define-command tree-enable -docstring 'Open the filetree' %{
@@ -69,9 +66,9 @@ provide-module tree %{
       dir=
       [ -f "$kak_buffile" ] && dir="$(dirname "$kak_buffile")" || dir="$PWD"
       if [ -n "$TMUX" ]; then
-        tmux split-window -c "$dir" -l "20%" -h -b "kak -c $kak_session -e 'edit %{ $kak_buffile }; _tree-enable-impl'" > /dev/null
+        tmux split-window -l "20%" -h -b "kak -c $kak_session -e '_tree-enable-impl %{$dir}'" > /dev/null
       else
-        echo "new 'edit %{ $kak_buffile }; _tree-enable-impl'"
+        echo "new '_tree-enable-impl %{$dir}'"
       fi
     }
   }
@@ -95,25 +92,12 @@ provide-module tree %{
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
 
-      if ! [ -x "$(command -v realpath)" ]; then
-        realpath() {
-          OURPWD=$PWD
-          cd "$(dirname "$1")"
-          LINK=$(readlink "$(basename "$1")")
-          while [ "$LINK" ]; do
-            cd "$(dirname "$LINK")"
-            LINK=$(readlink "$(basename "$1")")
-          done
-          REALPATH="$PWD/$(basename "$1")"
-          cd "$OURPWD"
-          echo "$REALPATH"
-        }
-      fi
       open(){
-        local filepath="$(realpath "$1")"
+        local filepath="$1"
 
         if [ -d "$filepath" ]; then
-          echo "set-option buffer _tree_current_dir \"$filepath\""
+          cd "$filepath"
+          echo "set-option buffer _tree_current_dir \"$PWD\""
           echo "execute-keys gg"
         elif [ -f "$filepath" ]; then
           if [ -n "$(echo "$kak_client_list" | grep -o "$kak_opt__tree_jump_client")" ]; then
@@ -139,7 +123,13 @@ provide-module tree %{
       if [ -n "$(echo "$current_file" | grep " -> ")" ]; then
         original="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
         target="$(echo "$current_file" | awk -F' -> ' '{print $2}')"
-        open "$target"
+        if [ -f "$target" ]; then
+          open "$target"
+        elif [ -d "$target" ]; then
+          cd "$original"
+          echo "set-option buffer _tree_current_dir \"$PWD\""
+          echo "execute-keys gg"
+        fi
       else
         open "$current_file"
       fi
@@ -192,22 +182,8 @@ provide-module tree %{
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
-      if ! [ -x "$(command -v realpath)" ]; then
-        realpath() {
-          OURPWD=$PWD
-          cd "$(dirname "$1")"
-          LINK=$(readlink "$(basename "$1")")
-          while [ "$LINK" ]; do
-            cd "$(dirname "$LINK")"
-            LINK=$(readlink "$(basename "$1")")
-          done
-          REALPATH="$PWD/$(basename "$1")"
-          cd "$OURPWD"
-          echo "$REALPATH"
-        }
-      fi
 
-      echo "set-option buffer _tree_copied_filepath '$(realpath "$current_file")'"
+      echo "set-option buffer _tree_copied_filepath '$kak_opt__tree_current_dir/$current_file'"
       echo "set-option buffer _tree_copied_action '$1'"
     }
   }
@@ -287,31 +263,20 @@ provide-module tree %{
   define-command -hidden _tree-cd-impl -params 2 %{
     evaluate-commands %sh{
       cd "$kak_opt__tree_current_dir"
-      if ! [ -x "$(command -v realpath)" ]; then
-        realpath() {
-          OURPWD=$PWD
-          cd "$(dirname "$1")"
-          LINK=$(readlink "$(basename "$1")")
-          while [ "$LINK" ]; do
-            cd "$(dirname "$LINK")"
-            LINK=$(readlink "$(basename "$1")")
-          done
-          REALPATH="$PWD/$(basename "$1")"
-          cd "$OURPWD"
-          echo "$REALPATH"
-        }
-      fi
-      dir="$(realpath "$1")"
-      ret_dir="$(realpath "$2")"
-      cd "$dir"
-      if [ $? -ne 0 ]; then
-        echo "change-directory '$ret_dir'"
-        echo "fail 'Failed to cd to "$dir"'"
-        exit
-      fi
-      echo "set-option buffer _tree_current_dir '$dir'"
+
+      dir="$1"
+      ret_dir="$2"
 
       echo "change-directory '$ret_dir'"
+
+      cd "$dir"
+
+      # Doing this as to not need to check that `$dir` is a link
+      if [ $? -ne 0 ]; then
+        echo "fail '`$dir` is not a directory'"
+      fi
+
+      echo "set-option buffer _tree_current_dir '$PWD'"
       echo  tree-redraw
     }
   }
