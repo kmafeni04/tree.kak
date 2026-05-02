@@ -25,7 +25,7 @@ provide-module tree %{
 
       ui_tree="$(
         eval "$kak_opt__tree_ui_cmd" |
-        sed -E "2s|\.|$(basename "$kak_opt__tree_current_dir")|;s|(.+)( -> .+/)|\1/\2|g"
+        sed -E "2s|\.|$(basename "$kak_opt__tree_current_dir")|;s|(.+)( -> .+/)|\1/\2|g;s:[=\*>\|]$::g"
       )"
 
       echo "set-register c '$ui_tree'"
