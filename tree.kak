@@ -72,7 +72,10 @@ provide-module tree %{
   }
 
   define-command tree-disable -docstring 'Close the filetree' %{
-    evaluate-commands -client %opt{_tree_client} quit
+    delete-buffer "*tree*"
+    try %{
+      evaluate-commands -client %opt{_tree_client} quit
+    }
   }
 
   define-command tree-toggle -docstring 'Toggle visibility of filetree' %{
@@ -189,6 +192,11 @@ provide-module tree %{
         current_file="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
       fi
 
+      if [ "$current_file" = "../" ] || [ "$current_file" = "./" ]; then
+        echo "fail 'Cannot copy ./ or ../'"
+        exit
+      fi
+
       echo "set-option buffer _tree_copied_filepath '$kak_opt__tree_current_dir/$current_file'"
       echo "set-option buffer _tree_copied_action '$1'"
     }
@@ -211,20 +219,49 @@ provide-module tree %{
     _tree-assert-buffer
     evaluate-commands %sh{
       [ -z "$kak_opt__tree_copied_filepath" ] && exit
+
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
-      dest="$kak_opt__tree_current_dir/$(basename "$kak_opt__tree_copied_filepath")"
+
+      name="$(basename "$kak_opt__tree_copied_filepath")"
+
+      case "$name" in
+        *.*)
+          extension="${name##*.}"
+          base="${name%.*}"
+          ;;
+        *)
+          extension=""
+          base="$name"
+          ;;
+      esac
+
+      new_name="$name"
+      i=0
+
+      while [ -e "$new_name" ]; do
+        i=$((i+1))
+        if [ -z "$extension" ]; then
+          new_name="$base-$i"
+        else
+          new_name="$base-$i.$extension"
+        fi
+      done
+
+      dest="$kak_opt__tree_current_dir/$new_name"
 
       copy() {
-        if [ -d "$1" ]; then
-          cp -r "$1" "$2"
+        local src="$1"
+        local dest="$2"
+        if [ -d "$src" ]; then
+          cp -r "$src" "$dest"
         else
-          cp "$1" "$2"
+          cp "$src" "$dest"
         fi
       }
 
-      if [ -e "$dest" ]; then
-        echo "fail 'File already exists'"
+      if [ "$kak_opt__tree_copied_filepath" = "$kak_opt__tree_current_dir/" ]; then
+        echo "fail 'Cannot copy/move into self'"
         exit
       fi
 
@@ -287,11 +324,12 @@ provide-module tree %{
       # Doing this as to not need to check that `$dir` is a link
       if [ $? -ne 0 ]; then
         echo "fail '`$dir` is not a directory'"
+        exit
       fi
 
       echo "set-option buffer _tree_current_dir '$PWD'"
-      echo  tree-redraw
     }
+    tree-redraw
   }
 
   define-command -hidden _tree-cd-prompt -params 1 %{
@@ -316,35 +354,35 @@ provide-module tree %{
   }
 
   hook global WinSetOption filetype=tree %{
-    set-option buffer modelinefmt ''
+    set-option window modelinefmt ''
 
-    map buffer normal i ":nop<ret>"
-    map buffer normal I ":nop<ret>"
-    map buffer normal a ":nop<ret>"
-    map buffer normal A ":nop<ret>"
-    map buffer normal o ":nop<ret>"
-    map buffer normal O ":nop<ret>"
-    map buffer normal c ":nop<ret>"
-    map buffer normal d ":nop<ret>"
-    map buffer normal u ":nop<ret>"
-    map buffer normal <a-d> ":nop<ret>"
-    map buffer normal <a-c> ":nop<ret>"
-    map buffer normal x ":nop<ret>"
-    map buffer normal y ":nop<ret>"
-    map buffer normal p ":nop<ret>"
-    map buffer normal r ":nop<ret>"
-    map buffer normal R ":nop<ret>"
+    map window normal i ":nop<ret>"
+    map window normal I ":nop<ret>"
+    map window normal a ":nop<ret>"
+    map window normal A ":nop<ret>"
+    map window normal o ":nop<ret>"
+    map window normal O ":nop<ret>"
+    map window normal c ":nop<ret>"
+    map window normal d ":nop<ret>"
+    map window normal u ":nop<ret>"
+    map window normal <a-d> ":nop<ret>"
+    map window normal <a-c> ":nop<ret>"
+    map window normal x ":nop<ret>"
+    map window normal y ":nop<ret>"
+    map window normal p ":nop<ret>"
+    map window normal r ":nop<ret>"
+    map window normal R ":nop<ret>"
 
     evaluate-commands %sh{
-      echo "add-highlighter buffer/ regex '^($kak_opt__tree_copied_indicator)' 1:red"
+      echo "add-highlighter -override buffer/ regex '^($kak_opt__tree_copied_indicator)' 1:red"
     }
 
-    hook buffer RawKey .* %{
+    hook window RawKey .* %{
       _tree-hline
     }
   }
 
-  hook global BufClose \*tree\* %{
+  hook global ClientClose %opt{_tree_client} %{
     tree-disable
   }
 }
