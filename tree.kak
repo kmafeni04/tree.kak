@@ -5,6 +5,8 @@ provide-module tree %{
   declare-option -hidden str _tree_client "treeclient"
   declare-option -hidden str _tree_copied_filepath
   declare-option -hidden str _tree_copied_action
+  declare-option -hidden str _tree_copied_indicator "\*"
+  declare-option -hidden str _tree_hline_face "default,default+@SecondarySelection"
 
   define-command -hidden _tree-assert-buffer %{
     evaluate-commands %sh{
@@ -12,6 +14,13 @@ provide-module tree %{
         echo "fail 'Not in "*tree*" buffer'"
       fi
     }
+  }
+
+  define-command -hidden _tree-hline %{
+    set-face buffer PrimaryCursor %opt{_tree_hline_face}
+    set-face buffer PrimaryCursorEol %opt{_tree_hline_face}
+    try %{ remove-highlighter buffer/hlline }
+    try %{ add-highlighter buffer/hlline line %val{cursor_line} %opt{_tree_hline_face} }
   }
 
   define-command tree-redraw -docstring 'Redraw the filetree' -params ..1 %{
@@ -28,9 +37,14 @@ provide-module tree %{
         sed -E "2s|\.|$(basename "$kak_opt__tree_current_dir")|;s|(.+)( -> .+/)|\1/\2|g;s:[=\*>\|]$::g"
       )"
 
+      if [[ -n "$kak_opt__tree_copied_filepath" ]] && [[ "$kak_opt__tree_current_dir" = "$(dirname "$kak_opt__tree_copied_filepath")" ]]; then
+        ui_tree="$(echo "$ui_tree" | sed -E "s|^.(.+ $(basename "$kak_opt__tree_copied_filepath"))|$kak_opt__tree_copied_indicator\1|")"
+      fi
+
       echo "set-register c '$ui_tree'"
       echo "execute-keys '%%<dquote>cR:select $kak_selection_desc<ret>'"
     }
+    _tree-hline
   }
 
   define-command -hidden _tree-enable-impl -params 1 %{
@@ -72,10 +86,6 @@ provide-module tree %{
   define-command tree-open -docstring 'Open a file' %{
     _tree-assert-buffer
     evaluate-commands %sh{
-      cd "$kak_opt__tree_current_dir"
-      ui_tree="$(eval $kak_opt__tree_ui_cmd)"
-      current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
-
       open(){
         local filepath="$1"
 
@@ -105,6 +115,10 @@ provide-module tree %{
           fi
         fi
       }
+
+      cd "$kak_opt__tree_current_dir"
+      ui_tree="$(eval $kak_opt__tree_ui_cmd)"
+      current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
 
       if [ -n "$(echo "$current_file" | grep " -> ")" ]; then
         original="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
@@ -152,8 +166,11 @@ provide-module tree %{
         cd "$kak_opt__tree_current_dir"
         ui_tree="$(eval $kak_opt__tree_ui_cmd)"
         current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
+        if [ -n "$(echo "$current_file" | grep " -> ")" ]; then
+          current_file="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
+        fi
 
-        if [ -n "$(command -v trash-put)" ]; then
+        if [ -x "$(command -v trash-put)" ]; then
           trash-put "$current_file"
         else
           rm -rf "$current_file"
@@ -168,10 +185,14 @@ provide-module tree %{
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
+      if [ -n "$(echo "$current_file" | grep " -> ")" ]; then
+        current_file="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
+      fi
 
       echo "set-option buffer _tree_copied_filepath '$kak_opt__tree_current_dir/$current_file'"
       echo "set-option buffer _tree_copied_action '$1'"
     }
+    tree-redraw
   }
 
   define-command tree-copy -docstring 'Copy a file to be pasted later' %{
@@ -192,10 +213,7 @@ provide-module tree %{
       [ -z "$kak_opt__tree_copied_filepath" ] && exit
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
-      current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
-      dir="$(dirname "$current_file")"
-
-      base_name="$(basename "$kak_opt__tree_copied_filepath")"
+      name="$(basename "$kak_opt__tree_copied_filepath")"
 
       copy() {
         if [ -d "$1" ]; then
@@ -206,9 +224,9 @@ provide-module tree %{
       }
 
       if [ "$kak_opt__tree_copied_action" = "copy" ]; then
-        copy "$kak_opt__tree_copied_filepath" "$dir/$base_name"
+        copy "$kak_opt__tree_copied_filepath" "$kak_opt__tree_current_dir/$name"
       elif [ "$kak_opt__tree_copied_action" = "cut" ]; then
-        mv "$kak_opt__tree_copied_filepath" "$dir/$base_name"
+        mv "$kak_opt__tree_copied_filepath" "$kak_opt__tree_current_dir/$name"
       fi
       if [ $? -ne 0 ]; then
         echo "fail 'Could not paste file'"
@@ -224,6 +242,7 @@ provide-module tree %{
     set-option buffer _tree_copied_filepath ''
     set-option buffer _tree_copied_action ''
     set-option buffer modelinefmt ''
+    tree-redraw
   }
 
   define-command tree-rename -docstring 'Rename a file' %{
@@ -232,6 +251,9 @@ provide-module tree %{
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
       current_file="$(echo "$ui_tree" | head -$kak_cursor_line | tail -1 | grep -Po "[\.\w-].*")"
+      if [ -n "$(echo "$current_file" | grep " -> ")" ]; then
+        current_file="$(echo "$current_file" | awk -F' -> ' '{print $1}')"
+      fi
       echo "set-register f '$current_file'"
     }
     evaluate-commands -save-regs 'f' %{
@@ -288,7 +310,6 @@ provide-module tree %{
     }
   }
 
-
   hook global WinSetOption filetype=tree %{
     set-option buffer modelinefmt ''
 
@@ -308,6 +329,14 @@ provide-module tree %{
     map buffer normal p ":nop<ret>"
     map buffer normal r ":nop<ret>"
     map buffer normal R ":nop<ret>"
+
+    evaluate-commands %sh{
+      echo "add-highlighter buffer/ regex '^($kak_opt__tree_copied_indicator)' 1:red"
+    }
+
+    hook buffer RawKey .* %{
+      _tree-hline
+    }
   }
 
   hook global BufClose \*tree\* %{
