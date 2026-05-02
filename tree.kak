@@ -37,7 +37,7 @@ provide-module tree %{
         sed -E "2s|\.|$(basename "$kak_opt__tree_current_dir")|;s|(.+)( -> .+/)|\1/\2|g;s:[=\*>\|]$::g"
       )"
 
-      if [[ -n "$kak_opt__tree_copied_filepath" ]] && [[ "$kak_opt__tree_current_dir" = "$(dirname "$kak_opt__tree_copied_filepath")" ]]; then
+      if [ -n "$kak_opt__tree_copied_filepath" ] && [ "$kak_opt__tree_current_dir" = "$(dirname "$kak_opt__tree_copied_filepath")" ]; then
         ui_tree="$(echo "$ui_tree" | sed -E "s|^.(.+ $(basename "$kak_opt__tree_copied_filepath"))|$kak_opt__tree_copied_indicator\1|")"
       fi
 
@@ -143,7 +143,7 @@ provide-module tree %{
       prompt "Create:" %{
         evaluate-commands %sh{
           cd "$kak_opt__tree_current_dir"
-          if [[ "$kak_text" == */ ]]; then
+          if [ -n "$(echo "$kak_text" | grep '.*/')" ]; then
             mkdir -p "$kak_text"
           else
             DIR_PATH=$(dirname "$kak_text")
@@ -213,7 +213,7 @@ provide-module tree %{
       [ -z "$kak_opt__tree_copied_filepath" ] && exit
       cd "$kak_opt__tree_current_dir"
       ui_tree="$(eval $kak_opt__tree_ui_cmd)"
-      name="$(basename "$kak_opt__tree_copied_filepath")"
+      dest="$kak_opt__tree_current_dir/$(basename "$kak_opt__tree_copied_filepath")"
 
       copy() {
         if [ -d "$1" ]; then
@@ -223,17 +223,22 @@ provide-module tree %{
         fi
       }
 
-      if [ "$kak_opt__tree_copied_action" = "copy" ]; then
-        copy "$kak_opt__tree_copied_filepath" "$kak_opt__tree_current_dir/$name"
-      elif [ "$kak_opt__tree_copied_action" = "cut" ]; then
-        mv "$kak_opt__tree_copied_filepath" "$kak_opt__tree_current_dir/$name"
-      fi
-      if [ $? -ne 0 ]; then
-        echo "fail 'Could not paste file'"
+      if [ -e "$dest" ]; then
+        echo "fail 'File already exists'"
         exit
       fi
-      echo "tree-clear-copy"
+
+      if [ "$kak_opt__tree_copied_action" = "copy" ]; then
+        copy "$kak_opt__tree_copied_filepath" "$dest"
+      elif [ "$kak_opt__tree_copied_action" = "cut" ]; then
+        mv "$kak_opt__tree_copied_filepath" "$dest"
+      fi
+      if [ $? -ne 0 ]; then
+        echo "fail 'Failed to paste file'"
+        exit
+      fi
     }
+    tree-clear-copy
     tree-redraw
   }
 
