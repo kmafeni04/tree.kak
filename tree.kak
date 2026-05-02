@@ -311,7 +311,7 @@ provide-module tree %{
   }
 
   hook global BufClose \*tree\* %{
-    tree-close
+    tree-disable
   }
 }
 
