@@ -275,59 +275,61 @@ provide-module ls %{
 
   define-command ls-toggle-select %{
     _ls-assert-buffer
-    evaluate-commands %sh{
-      cd "$kak_opt__ls_current_dir" || exit
-      ui="$(eval "$kak_opt__ls_cmd")"
-      current_file="$(echo "$ui" | head -"$kak_cursor_line" | tail -1 | grep -o '[.[:alnum:]_-].*')"
+    evaluate-commands -itersel %{
+      evaluate-commands %sh{
+        cd "$kak_opt__ls_current_dir" || exit
+        ui="$(eval "$kak_opt__ls_cmd")"
+        current_file="$(echo "$ui" | head -"$kak_cursor_line" | tail -1 | grep -o '[.[:alnum:]_-].*')"
 
-      if [ "$kak_cursor_line" -eq 1 ]; then
-        printf '%s\n' "_ls-jump-client-send-cmd %{echo -markup '{Error}Can not select $kak_opt__ls_current_dir/'}"
-        printf 'fail\n'
-        exit
-      fi
-
-      current_file="$kak_opt__ls_current_dir/$current_file"
-
-      eval "set -- $kak_quoted_opt__ls_selected_filepaths"
-      count=$#
-      found=false
-      while [ $# -gt 0 ]; do
-        path="$1"
-        shift
-
-        if [ "$path" = "$current_file" ]; then
-          printf '%s\n' "set-option -remove window _ls_selected_filepaths '$path'"
-          count=$((count - 1))
-          found=true
-          break
+        if [ "$kak_cursor_line" -eq 1 ]; then
+          printf '%s\n' "_ls-jump-client-send-cmd %{echo -markup '{Error}Can not select $kak_opt__ls_current_dir/'}"
+          printf 'fail\n'
+          exit
         fi
-      done
 
-      if [ $found = false ]; then
-        printf '%s\n' "set-option -add window _ls_selected_filepaths '$current_file'"
-        extra_path="$current_file"
-        count=$((count + 1))
-      fi
+        current_file="$kak_opt__ls_current_dir/$current_file"
 
-      if [ $count -gt 0 ]; then
-        printf '%s\n' "_ls-jump-client-send-cmd %{info -title '$count selected' %{$(
-          eval "set -- $kak_quoted_opt__ls_selected_filepaths"
-          while [ $# -gt 0 ]; do
-            path="$1"
-            shift
+        eval "set -- $kak_quoted_opt__ls_selected_filepaths"
+        count=$#
+        found=false
+        while [ $# -gt 0 ]; do
+          path="$1"
+          shift
 
-            if [ "$path" = "$current_file" ]; then
-              continue
-            fi
-            printf '%s\n' "$path"
-          done
-          if [ -n "$extra_path" ]; then
-            printf '%s\n' "$extra_path"
+          if [ "$path" = "$current_file" ]; then
+            printf '%s\n' "set-option -remove window _ls_selected_filepaths '$path'"
+            count=$((count - 1))
+            found=true
+            break
           fi
-        )}}"
-      else
-        printf '%s\n' "_ls-jump-client-send-cmd %{execute-keys <esc>}"
-      fi
+        done
+
+        if [ $found = false ]; then
+          printf '%s\n' "set-option -add window _ls_selected_filepaths '$current_file'"
+          extra_path="$current_file"
+          count=$((count + 1))
+        fi
+
+        if [ $count -gt 0 ]; then
+          printf '%s\n' "_ls-jump-client-send-cmd %{info -title '$count selected' %{$(
+            eval "set -- $kak_quoted_opt__ls_selected_filepaths"
+            while [ $# -gt 0 ]; do
+              path="$1"
+              shift
+
+              if [ "$path" = "$current_file" ]; then
+                continue
+              fi
+              printf '%s\n' "$path"
+            done
+            if [ -n "$extra_path" ]; then
+              printf '%s\n' "$extra_path"
+            fi
+          )}}"
+        else
+          printf '%s\n' "_ls-jump-client-send-cmd %{execute-keys <esc>}"
+        fi
+      }
     }
     ls-redraw
   }
