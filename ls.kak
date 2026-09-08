@@ -660,6 +660,7 @@ provide-module ls %{
       current_file="$(echo "$ui" | head -"$kak_cursor_line" | tail -1 | grep -o '[.[:alnum:]_-].*')"
 
       echo "set-register dquote '$kak_opt__ls_current_dir/$current_file'"
+      printf '_ls-jump-client-send-cmd %%{%s}\n' "info 'File path copied to dquote register'"
     }
   }
 
@@ -670,12 +671,14 @@ provide-module ls %{
       current_file="$(echo "$ui" | head -"$kak_cursor_line" | tail -1 | grep -o '[.[:alnum:]_-].*')"
 
       echo "set-register dquote '$current_file'"
+      printf '_ls-jump-client-send-cmd %%{%s}\n' "info 'File name copied to dquote register'"
     }
   }
 
   define-command ls-copy-directory %{
     evaluate-commands %sh{
       echo "set-register dquote '$kak_opt__ls_current_dir'"
+      printf '_ls-jump-client-send-cmd %%{%s}\n' "info 'Directory path copied to dquote register'"
     }
   }
 
